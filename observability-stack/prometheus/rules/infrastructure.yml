@@ -1,0 +1,162 @@
+groups:
+  - name: infrastructure
+    interval: 30s
+    rules:
+
+      # ── CPU ────────────────────────────────────────────────────────────────
+
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg by(instance, server_name) (
+            rate(node_cpu_seconds_total{mode="idle"}[5m])
+          ) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "High CPU on {{ $labels.server_name }}"
+          description: "CPU usage is {{ $value | printf \"%.1f\" }}% (threshold: 85%) on {{ $labels.instance }}. Sustained for 5m."
+          runbook: "https://github.com/org/observability-stack/blob/main/docs/runbook.md#high-cpu"
+
+      - alert: CriticalCPUUsage
+        expr: |
+          100 - (avg by(instance, server_name) (
+            rate(node_cpu_seconds_total{mode="idle"}[5m])
+          ) * 100) > 95
+        for: 2m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "CRITICAL CPU on {{ $labels.server_name }}"
+          description: "CPU at {{ $value | printf \"%.1f\" }}% on {{ $labels.instance }}. Immediate action required."
+          runbook: "https://github.com/org/observability-stack/blob/main/docs/runbook.md#high-cpu"
+
+      # ── Memory ────────────────────────────────────────────────────────────
+
+      - alert: HighMemoryUsage
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "High memory on {{ $labels.server_name }}"
+          description: "Memory usage is {{ $value | printf \"%.1f\" }}% on {{ $labels.instance }}."
+          runbook: "https://github.com/org/observability-stack/blob/main/docs/runbook.md#high-memory"
+
+      - alert: CriticalMemoryUsage
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "CRITICAL memory on {{ $labels.server_name }}"
+          description: "Memory at {{ $value | printf \"%.1f\" }}% on {{ $labels.instance }}. OOM risk."
+          runbook: "https://github.com/org/observability-stack/blob/main/docs/runbook.md#high-memory"
+
+      # ── Disk ──────────────────────────────────────────────────────────────
+
+      - alert: DiskSpaceWarning
+        expr: |
+          (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} /
+                node_filesystem_size_bytes{fstype!~"tmpfs|overlay"})) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Disk usage above 80% on {{ $labels.server_name }}"
+          description: "Disk {{ $labels.mountpoint }} at {{ $value | printf \"%.1f\" }}% on {{ $labels.instance }}."
+          runbook: "https://github.com/org/observability-stack/blob/main/docs/runbook.md#disk-space"
+
+      - alert: DiskSpaceCritical
+        expr: |
+          (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} /
+                node_filesystem_size_bytes{fstype!~"tmpfs|overlay"})) * 100 > 95
+        for: 5m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "CRITICAL disk on {{ $labels.server_name }}"
+          description: "Disk {{ $labels.mountpoint }} at {{ $value | printf \"%.1f\" }}% on {{ $labels.instance }}. Immediate cleanup required."
+          runbook: "https://github.com/org/observability-stack/blob/main/docs/runbook.md#disk-space"
+
+      - alert: DiskWillFillIn4Hours
+        expr: |
+          predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}[1h], 4 * 3600) < 0
+        for: 15m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Disk filling fast on {{ $labels.server_name }}"
+          description: "Filesystem {{ $labels.mountpoint }} on {{ $labels.instance }} projected to fill within 4 hours."
+          runbook: "https://github.com/org/observability-stack/blob/main/docs/runbook.md#disk-space"
+
+      # ── Network ───────────────────────────────────────────────────────────
+
+      - alert: HighNetworkReceive
+        expr: |
+          rate(node_network_receive_bytes_total{device!="lo"}[5m]) > 100000000
+        for: 5m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "High inbound traffic on {{ $labels.server_name }}"
+          description: "Receiving {{ $value | humanize }}B/s on {{ $labels.device }} of {{ $labels.instance }}."
+
+      - alert: HighNetworkTransmit
+        expr: |
+          rate(node_network_transmit_bytes_total{device!="lo"}[5m]) > 100000000
+        for: 5m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "High outbound traffic on {{ $labels.server_name }}"
+          description: "Transmitting {{ $value | humanize }}B/s on {{ $labels.device }} of {{ $labels.instance }}."
+
+      # ── Instance Up ───────────────────────────────────────────────────────
+
+      - alert: InstanceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "Instance {{ $labels.server_name }} is DOWN"
+          description: "{{ $labels.instance }} (job: {{ $labels.job }}) has been unreachable for more than 1 minute."
+          runbook: "https://github.com/org/observability-stack/blob/main/docs/runbook.md#instance-down"
+
+      - alert: NodeExporterDown
+        expr: up{job="node"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "node_exporter down on {{ $labels.server_name }}"
+          description: "node_exporter on {{ $labels.instance }} is not reachable. Metrics collection stopped."
+
+      # ── Load Average ──────────────────────────────────────────────────────
+
+      - alert: HighLoadAverage
+        expr: |
+          node_load15 / count by(instance) (
+            node_cpu_seconds_total{mode="idle"}
+          ) > 1.5
+        for: 10m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "High load average on {{ $labels.server_name }}"
+          description: "15-minute load average / CPU count = {{ $value | printf \"%.2f\" }} on {{ $labels.instance }}."

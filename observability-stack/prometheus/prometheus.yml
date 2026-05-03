@@ -1,0 +1,71 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+  external_labels:
+    environment: production
+    region: ap-south-1
+    client: fintech-vadodara
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - localhost:9093
+
+# Load alert rules
+rule_files:
+  - "rules/infrastructure.yml"
+  - "rules/application.yml"
+
+# Scrape configurations
+scrape_configs:
+
+  # Prometheus self-monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Node exporter — all 8 production servers
+  - job_name: "node"
+    file_sd_configs:
+      - files:
+          - "targets/ec2_targets.yml"
+        refresh_interval: 1m
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - source_labels: [__meta_ec2_tag_Name]
+        target_label: server_name
+
+  # Application-level exporter (custom metrics endpoint)
+  - job_name: "application"
+    metrics_path: /metrics
+    scheme: http
+    file_sd_configs:
+      - files:
+          - "targets/ec2_targets.yml"
+    params:
+      port: ["9101"]
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: "(.+):.*"
+        replacement: "${1}:9101"
+        target_label: __address__
+
+  # Payment service — higher scrape frequency for business metrics
+  - job_name: "payment-service"
+    scrape_interval: 10s
+    static_configs:
+      - targets:
+          - "10.0.1.21:9101"
+          - "10.0.1.22:9101"
+        labels:
+          service: payment
+          tier: critical
+
+  # AlertManager self-monitoring
+  - job_name: "alertmanager"
+    static_configs:
+      - targets: ["localhost:9093"]

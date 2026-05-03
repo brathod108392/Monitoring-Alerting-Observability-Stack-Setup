@@ -1,0 +1,59 @@
+# Production EC2 targets — 8 servers
+# Updated: 2024-11
+# node_exporter listens on :9100
+
+- targets:
+    - "10.0.1.10:9100"
+  labels:
+    server_name: prod-api-01
+    role: api
+    az: ap-south-1a
+
+- targets:
+    - "10.0.1.11:9100"
+  labels:
+    server_name: prod-api-02
+    role: api
+    az: ap-south-1b
+
+- targets:
+    - "10.0.1.12:9100"
+  labels:
+    server_name: prod-api-03
+    role: api
+    az: ap-south-1a
+
+- targets:
+    - "10.0.1.20:9100"
+  labels:
+    server_name: prod-worker-01
+    role: worker
+    az: ap-south-1a
+
+- targets:
+    - "10.0.1.21:9100"
+  labels:
+    server_name: prod-payment-01
+    role: payment
+    az: ap-south-1a
+
+- targets:
+    - "10.0.1.22:9100"
+  labels:
+    server_name: prod-payment-02
+    role: payment
+    az: ap-south-1b
+
+- targets:
+    - "10.0.1.30:9100"
+  labels:
+    server_name: prod-db-01
+    role: database
+    az: ap-south-1a
+
+- targets:
+    - "10.0.1.31:9100"
+  labels:
+    server_name: prod-db-02
+    role: database
+    az: ap-south-1b

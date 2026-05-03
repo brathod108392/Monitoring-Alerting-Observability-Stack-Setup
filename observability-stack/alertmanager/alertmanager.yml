@@ -1,0 +1,131 @@
+global:
+  resolve_timeout: 5m
+  slack_api_url: "https://hooks.slack.com/services/REPLACE_WITH_WEBHOOK"
+  pagerduty_url: "https://events.pagerduty.com/v2/enqueue"
+
+# ── Templates ──────────────────────────────────────────────────────────────────
+templates:
+  - "/etc/alertmanager/templates/*.tmpl"
+
+# ── Routing ────────────────────────────────────────────────────────────────────
+route:
+  receiver: "slack-info"
+  group_by: ["alertname", "instance", "service"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+  routes:
+    # Critical alerts → PagerDuty (immediate page)
+    - match:
+        severity: critical
+      receiver: "pagerduty-critical"
+      group_wait: 10s
+      repeat_interval: 1h
+      continue: true  # also send to Slack for visibility
+
+    - match:
+        severity: critical
+      receiver: "slack-critical"
+
+    # Payment-specific critical alerts — shorter repeat interval
+    - match_re:
+        service: "payment"
+      match:
+        severity: critical
+      receiver: "pagerduty-critical"
+      group_wait: 0s
+      repeat_interval: 30m
+
+    # Warning alerts → Slack #alerts-infra
+    - match:
+        severity: warning
+        team: infra
+      receiver: "slack-infra-warning"
+      repeat_interval: 2h
+
+    # Warning alerts → Slack #alerts-app
+    - match:
+        severity: warning
+        team: app
+      receiver: "slack-app-warning"
+      repeat_interval: 2h
+
+    # Info / catch-all → Slack #alerts-info
+    - match:
+        severity: info
+      receiver: "slack-info"
+      repeat_interval: 8h
+
+# ── Inhibit Rules ──────────────────────────────────────────────────────────────
+inhibit_rules:
+  # If instance is down, suppress all other alerts from the same instance
+  - source_match:
+      alertname: "InstanceDown"
+    target_match_re:
+      alertname: ".+"
+    equal: ["instance"]
+
+  # If critical fires, suppress the corresponding warning
+  - source_match:
+      severity: "critical"
+    target_match:
+      severity: "warning"
+    equal: ["alertname", "instance"]
+
+# ── Receivers ──────────────────────────────────────────────────────────────────
+receivers:
+
+  - name: "pagerduty-critical"
+    pagerduty_configs:
+      - routing_key: "REPLACE_WITH_PAGERDUTY_INTEGRATION_KEY"
+        severity: critical
+        description: "{{ range .Alerts }}{{ .Annotations.summary }}\n{{ end }}"
+        details:
+          environment: production
+          instance: "{{ range .Alerts }}{{ .Labels.instance }}{{ end }}"
+          runbook: "{{ range .Alerts }}{{ .Annotations.runbook }}{{ end }}"
+          description: "{{ range .Alerts }}{{ .Annotations.description }}{{ end }}"
+
+  - name: "slack-critical"
+    slack_configs:
+      - channel: "#alerts-critical"
+        color: "danger"
+        title: ":red_circle: CRITICAL — {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}"
+        text: |
+          *Instance:* {{ range .Alerts }}{{ .Labels.instance }}{{ end }}
+          *Description:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+          *Runbook:* {{ range .Alerts }}{{ .Annotations.runbook }}{{ end }}
+        send_resolved: true
+        icon_emoji: ":rotating_light:"
+
+  - name: "slack-infra-warning"
+    slack_configs:
+      - channel: "#alerts-infra"
+        color: "warning"
+        title: ":warning: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}"
+        text: |
+          *Instance:* {{ range .Alerts }}{{ .Labels.instance }}{{ end }}
+          *Details:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+        send_resolved: true
+        icon_emoji: ":warning:"
+
+  - name: "slack-app-warning"
+    slack_configs:
+      - channel: "#alerts-app"
+        color: "warning"
+        title: ":warning: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}"
+        text: |
+          *Service:* {{ range .Alerts }}{{ .Labels.service }}{{ end }}
+          *Instance:* {{ range .Alerts }}{{ .Labels.instance }}{{ end }}
+          *Details:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+        send_resolved: true
+        icon_emoji: ":warning:"
+
+  - name: "slack-info"
+    slack_configs:
+      - channel: "#alerts-info"
+        color: "good"
+        title: ":information_source: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}"
+        text: "{{ range .Alerts }}{{ .Annotations.description }}{{ end }}"
+        send_resolved: true

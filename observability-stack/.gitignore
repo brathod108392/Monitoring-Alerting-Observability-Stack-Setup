@@ -1,0 +1,33 @@
+# Secrets — never commit these
+*.env
+.env.*
+secrets/
+*.key
+*.pem
+*.p12
+
+# AlertManager / Prometheus secrets
+alertmanager/secrets.yml
+prometheus/secrets.yml
+
+# Terraform state
+*.tfstate
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Canary credentials
+cloudwatch/synthetics/.env

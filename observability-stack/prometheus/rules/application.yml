@@ -1,0 +1,163 @@
+groups:
+  - name: application
+    interval: 30s
+    rules:
+
+      # ── Error Rate ────────────────────────────────────────────────────────
+
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum by(instance, server_name, service) (
+              rate(http_requests_total{status=~"5.."}[5m])
+            )
+            /
+            sum by(instance, server_name, service) (
+              rate(http_requests_total[5m])
+            )
+          ) * 100 > 1
+        for: 3m
+        labels:
+          severity: warning
+          team: app
+        annotations:
+          summary: "Error rate above 1% on {{ $labels.service }}"
+          description: "HTTP 5xx error rate is {{ $value | printf \"%.2f\" }}% on {{ $labels.instance }} ({{ $labels.service }})."
+          runbook: "https://github.com/org/observability-stack/blob/main/docs/runbook.md#high-error-rate"
+
+      - alert: CriticalErrorRate
+        expr: |
+          (
+            sum by(instance, server_name, service) (
+              rate(http_requests_total{status=~"5.."}[5m])
+            )
+            /
+            sum by(instance, server_name, service) (
+              rate(http_requests_total[5m])
+            )
+          ) * 100 > 5
+        for: 1m
+        labels:
+          severity: critical
+          team: app
+        annotations:
+          summary: "CRITICAL error rate on {{ $labels.service }}"
+          description: "HTTP 5xx error rate is {{ $value | printf \"%.2f\" }}% on {{ $labels.instance }}. Possible service degradation."
+          runbook: "https://github.com/org/observability-stack/blob/main/docs/runbook.md#high-error-rate"
+
+      # ── Latency ───────────────────────────────────────────────────────────
+
+      - alert: HighP95Latency
+        expr: |
+          histogram_quantile(0.95, sum by(le, instance, service) (
+            rate(http_request_duration_seconds_bucket[5m])
+          )) > 1
+        for: 5m
+        labels:
+          severity: warning
+          team: app
+        annotations:
+          summary: "High p95 latency on {{ $labels.service }}"
+          description: "p95 latency is {{ $value | printf \"%.3f\" }}s on {{ $labels.instance }} (threshold: 1s)."
+          runbook: "https://github.com/org/observability-stack/blob/main/docs/runbook.md#high-latency"
+
+      - alert: HighP99Latency
+        expr: |
+          histogram_quantile(0.99, sum by(le, instance, service) (
+            rate(http_request_duration_seconds_bucket[5m])
+          )) > 2
+        for: 3m
+        labels:
+          severity: critical
+          team: app
+        annotations:
+          summary: "CRITICAL p99 latency on {{ $labels.service }}"
+          description: "p99 latency is {{ $value | printf \"%.3f\" }}s on {{ $labels.instance }} (threshold: 2s)."
+          runbook: "https://github.com/org/observability-stack/blob/main/docs/runbook.md#high-latency"
+
+      # ── Payment Service Specific ───────────────────────────────────────────
+
+      - alert: PaymentServiceDown
+        expr: up{job="payment-service"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          team: app
+          service: payment
+        annotations:
+          summary: "PAYMENT SERVICE DOWN — {{ $labels.instance }}"
+          description: "Payment service on {{ $labels.instance }} is unreachable. Transaction processing impacted."
+          runbook: "https://github.com/org/observability-stack/blob/main/docs/runbook.md#payment-service-down"
+
+      - alert: LowPaymentSuccessRate
+        expr: |
+          (
+            sum(rate(payment_transactions_total{status="success"}[5m]))
+            /
+            sum(rate(payment_transactions_total[5m]))
+          ) * 100 < 99
+        for: 2m
+        labels:
+          severity: critical
+          team: app
+          service: payment
+        annotations:
+          summary: "Payment success rate below 99%"
+          description: "Payment transaction success rate is {{ $value | printf \"%.2f\" }}%. Investigate immediately."
+          runbook: "https://github.com/org/observability-stack/blob/main/docs/runbook.md#payment-success-rate"
+
+      - alert: PaymentLatencyHigh
+        expr: |
+          histogram_quantile(0.95, sum by(le) (
+            rate(payment_processing_duration_seconds_bucket[5m])
+          )) > 3
+        for: 3m
+        labels:
+          severity: warning
+          team: app
+          service: payment
+        annotations:
+          summary: "Payment processing p95 latency high"
+          description: "Payment p95 processing time is {{ $value | printf \"%.2f\" }}s (threshold: 3s)."
+
+      # ── Request Rate ──────────────────────────────────────────────────────
+
+      - alert: NoRequestsReceived
+        expr: |
+          sum by(instance, service) (
+            rate(http_requests_total[5m])
+          ) == 0
+        for: 5m
+        labels:
+          severity: warning
+          team: app
+        annotations:
+          summary: "No requests on {{ $labels.service }}"
+          description: "{{ $labels.instance }} has received 0 requests in the last 5 minutes. Possible upstream issue or deployment."
+
+      # ── Database ──────────────────────────────────────────────────────────
+
+      - alert: SlowDatabaseQueries
+        expr: |
+          histogram_quantile(0.95, sum by(le, query_type) (
+            rate(db_query_duration_seconds_bucket[5m])
+          )) > 1
+        for: 5m
+        labels:
+          severity: warning
+          team: app
+        annotations:
+          summary: "Slow DB queries detected ({{ $labels.query_type }})"
+          description: "DB query p95 is {{ $value | printf \"%.3f\" }}s for {{ $labels.query_type }} queries."
+          runbook: "https://github.com/org/observability-stack/blob/main/docs/runbook.md#slow-db-queries"
+
+      - alert: DatabaseConnectionPoolExhausted
+        expr: |
+          db_connection_pool_available / db_connection_pool_size < 0.1
+        for: 2m
+        labels:
+          severity: critical
+          team: app
+        annotations:
+          summary: "DB connection pool nearly exhausted"
+          description: "Only {{ $value | printf \"%.0f\" }}% of connection pool available. Risk of connection timeouts."
