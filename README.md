@@ -4,7 +4,7 @@ A full observability stack built for a FinTech startup's production environment.
 
 ---
 
-## Stack Overview
+### Stack Overview
 
 | Layer | Tool | Purpose |
 |---|---|---|
@@ -16,7 +16,7 @@ A full observability stack built for a FinTech startup's production environment.
 
 ---
 
-## Architecture
+### Architecture
 
 ```
 8x Production EC2 Instances
@@ -43,7 +43,7 @@ A full observability stack built for a FinTech startup's production environment.
 
 ---
 
-## Directory Structure
+### Directory Structure
 
 ```
 .
@@ -77,7 +77,7 @@ A full observability stack built for a FinTech startup's production environment.
 
 ---
 
-## Results
+### Results
 
 - **MTTD reduced** from 47 minutes → under 3 minutes
 - **22 alert rules** deployed across infra + application layers
@@ -86,7 +86,7 @@ A full observability stack built for a FinTech startup's production environment.
 
 ---
 
-## Setup
+### Setup
 
 See individual component READMEs and [`docs/runbook.md`](docs/runbook.md) for full setup and operational procedures.
 
@@ -111,7 +111,7 @@ alertmanager --config.file=alertmanager/alertmanager.yml
 
 ---
 
-## Alert Routing
+### Alert Routing
 
 | Severity | Condition | Destination |
 |---|---|---|
